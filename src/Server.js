@@ -4,6 +4,11 @@ const app = require("./App");
 const connectDB = require("./config/db.js");
 const config = require("./Index.js");
 
+
+adminRoutes = require("./routes/AdminRoutes");
+
+app.use("/gknbvg/SkillPort-admin/ertqyuiok", adminRoutes);
+
 async function startServer() {
   await connectDB(config.mongoUri);
 
