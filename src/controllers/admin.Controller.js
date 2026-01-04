@@ -5,9 +5,7 @@ const Admin = require('../models/Admin');
 const { getOtpTemplate } = require('../utils/emailTemplate');
 
 
-// ===============================
 // SMTP Transporter
-// ===============================
 async function getMailTransporter() {
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,

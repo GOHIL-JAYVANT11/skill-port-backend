@@ -6,8 +6,12 @@ const config = require("./Index.js");
 
 
 adminRoutes = require("./routes/AdminRoutes");
+userRoutes = require("./routes/UserRoutes");
 
 app.use("/gknbvg/SkillPort-admin/ertqyuiok", adminRoutes);
+app.use("/gknbvg/SkillPort-user/ertqyuiok", userRoutes);
+
+
 
 async function startServer() {
   await connectDB(config.mongoUri);
