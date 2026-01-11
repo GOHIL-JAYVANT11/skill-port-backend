@@ -20,8 +20,8 @@ const UserSchema = new mongoose.Schema({
         required: true
     },
     Role: {
-        type: String,
-        enum: ["Job Seeker", "Freelancer"],
+        type: [String],
+        enum: ['Job Seeker', 'Freelancer'],
         required: true
     },
     
