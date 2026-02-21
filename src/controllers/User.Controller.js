@@ -26,6 +26,14 @@ class UserController {
 
             const existingUser = await User.findOne({ $or: [{ email }, { number }] });
             if (existingUser) {
+                const existingEducation = await Education.findOne({ userId: existingUser._id });
+                if (!existingEducation) {
+                    return res.status(200).json({ 
+                        success: false,
+                        message: "User with this email or number already exists but education is empty",
+                        userId: existingUser._id
+                    });
+                }
                 return res.status(400).json({ message: "User with this email or number already exists" });
             }
 
@@ -69,6 +77,67 @@ class UserController {
 
         } catch (error) {
             console.error("Register Error:", error);
+            res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+    // ================= LOGIN =================
+    async login(req, res) {
+        try {
+            const { email, password } = req.body;
+
+            if (!email || !password) {
+                return res.status(400).json({ message: "Email and password are required" });
+            }
+
+            const user = await User.findOne({ email });
+            if (!user) {
+                return res.status(401).json({ message: "Invalid email " });
+            }
+
+            const isMatch = await bcrypt.compare(password, user.password);
+            if (!isMatch) {
+                return res.status(401).json({ message: "Invalid  password" });
+            }
+
+            // Check if education details are filled
+            const education = await Education.findOne({ userId: user._id });
+            if (!education) {
+                return res.status(403).json({
+                    success: false,
+                    message: "pls fillup your education details",
+                    userId: user._id
+                });
+            }
+
+            // Generate OTP
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            const expiresAt = Date.now() + 10 * 60 * 1000;
+            global.__USER_OTPS__.set(String(user._id), { otp, expiresAt });
+
+            (async () => {
+                try {
+                    const transporter = await getMailTransporter();
+                    await transporter.sendMail({
+                        from: process.env.MAIL_FROM || process.env.SMTP_USER,
+                        to: user.email,
+                        subject: "Your Login OTP",
+                        html: getOtpTemplate(otp),
+                    });
+                } catch (err) {
+                    console.error("OTP send failed:", err.message);
+                }
+            })();
+
+            res.status(200).json({
+                success: true,
+                message: "Login successful. OTP sent to email. Verify to continue.",
+                email: user.email,
+                userId: user._id
+            });
+
+        } catch (error) {
+            console.error("Login Error:", error);
             res.status(500).json({ message: "Internal Server Error", error: error.message });
         }
     }
@@ -190,11 +259,51 @@ class UserController {
                 passingYear,
                 gradingSystem,
                 cgpa,
+                medium,
                 cgpaOutOf,
                 keySkills,
+                percentage,
                 isCurrentlyPursuing,
                 isPrimary
             } = req.body;
+
+            // Check if education details already exist for this user
+            const existingEducation = await Education.findOne({ userId });
+
+            if (existingEducation) {
+                // Update existing education details
+                if (isPrimary) {
+                    await Education.updateMany({ userId, _id: { $ne: existingEducation._id } }, { isPrimary: false });
+                }
+
+                const updatedEducation = await Education.findByIdAndUpdate(
+                    existingEducation._id,
+                    {
+                        highestQualification,
+                        course,
+                        courseType,
+                        specialization,
+                        universityInstitute,
+                        startingYear,
+                        passingYear,
+                        gradingSystem,
+                        cgpa,
+                        medium,
+                        cgpaOutOf,
+                        keySkills,
+                        percentage,
+                        isCurrentlyPursuing,
+                        isPrimary
+                    },
+                    { new: true }
+                );
+
+                return res.status(200).json({
+                    success: true,
+                    message: "Education details updated successfully",
+                    data: updatedEducation
+                });
+            }
 
             // Handle isPrimary logic: if this is primary, set others for this user to false
             if (isPrimary) {
@@ -213,8 +322,10 @@ class UserController {
                 passingYear,
                 gradingSystem,
                 cgpa,
+                medium,
                 cgpaOutOf,
                 keySkills,
+                percentage,
                 isCurrentlyPursuing,
                 isPrimary
             });

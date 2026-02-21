@@ -23,51 +23,53 @@ const EducationSchema = new mongoose.Schema({
     // Course name (M.Tech, B.Tech, PhD, MBA, Diploma etc.)
     course: {
         type: String,
-        required: true,
+        required: false,
         trim: true
     },
     courseType: {
         type: String,
         enum: ["Full Time", "Part Time", "Distance", "Online"],
-        required: true
+        required: false
     },
     specialization: {
         type: String,
-        required: true,
+        required: false,
         trim: true
     },
     universityInstitute: {
         type: String,
-        required: true,
+        required: false,
         trim: true
+    },
+    medium: {
+        type: String,
+        trim: false
     },
     startingYear: {
         type: Number,
-        required: true,
+        required: false,
         min: 1950
     },
     passingYear: {
         type: Number,
-        required: true
+        required: false
     },
     gradingSystem: {
         type: String,
-        enum: [
-            "Scale 10 Grading System",
-            "Scale 4 Grading System",
-            "Percentage",
-            "CGPA"
-        ],
-        required: true
+        required: false
     },
     cgpa: {
         type: Number,
-        required: true
+        required: false
+    },
+    percentage: {
+        type: String,
+        required: false
     },
     cgpaOutOf: {
         type: Number,
         enum: [4, 10, 100],
-        required: true
+        required: false
     },
     keySkills: [
         {
