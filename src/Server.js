@@ -5,8 +5,8 @@ const connectDB = require("./config/db.js");
 const config = require("./Index.js");
 
 
-adminRoutes = require("./routes/AdminRoutes");
-userRoutes = require("./routes/UserRoutes");
+adminRoutes = require("./routes/Admin/AdminRoutes");
+userRoutes = require("./routes/User/UserRoutes");
 
 app.use("/gknbvg/SkillPort-admin/ertqyuiok", adminRoutes);
 app.use("/gknbvg/SkillPort-user/ertqyuiok", userRoutes);

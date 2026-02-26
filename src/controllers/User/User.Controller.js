@@ -1,9 +1,10 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const nodemailer = require("nodemailer");
-const User = require('../models/User');
-const Education = require('../models/Education');
-const { getOtpTemplate } = require('../utils/emailTemplate');
+const User = require('../../models/User/User');
+const Education = require('../../models/User/Education');
+const UserService = require('../../services/User/User.service');
+const { getOtpTemplate } = require('../../utils/emailTemplate');
 
 async function getMailTransporter() {
     return nodemailer.createTransport({
@@ -340,6 +341,53 @@ class UserController {
 
         } catch (error) {
             console.error("Add Education Error:", error);
+            res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+    // ================= UPDATE PROFILE =================
+    async updateProfile(req, res) {
+        try {
+            const userId = req.user ? req.user._id : req.body.userId;
+
+            if (!userId) {
+                return res.status(401).json({ message: "Unauthorized: User ID missing" });
+            }
+
+            const {
+                resume,
+                location,
+                status,
+                email,
+                userimage,
+                Fullname,
+                resumeHeadline,
+                skill
+            } = req.body;
+
+            const updateData = {};
+            if (resume !== undefined) updateData.resume = resume;
+            if (location !== undefined) updateData.location = location;
+            if (status !== undefined) updateData.status = status;
+            if (email !== undefined) updateData.email = email;
+            if (userimage !== undefined) updateData.userimage = userimage;
+            if (Fullname !== undefined) updateData.Fullname = Fullname;
+            if (resumeHeadline !== undefined) updateData.resumeHeadline = resumeHeadline;
+            if (skill !== undefined) updateData.skill = skill;
+
+            const updatedUser = await UserService.updateProfile(userId, updateData);
+
+            return res.status(200).json({
+                success: true,
+                message: "Profile updated successfully",
+                data: updatedUser
+            });
+
+        } catch (error) {
+            console.error("Update Profile Error:", error);
+            if (error.message === "Email already in use by another account" || error.message === "User not found") {
+                return res.status(400).json({ message: error.message });
+            }
             res.status(500).json({ message: "Internal Server Error", error: error.message });
         }
     }

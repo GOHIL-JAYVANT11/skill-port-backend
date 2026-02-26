@@ -1,8 +1,8 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const nodemailer = require("nodemailer");
-const Admin = require('../models/Admin');
-const { getOtpTemplate } = require('../utils/emailTemplate');
+const Admin = require('../../models/Admin/Admin');
+const { getOtpTemplate } = require('../../utils/emailTemplate');
 
 
 // SMTP Transporter
@@ -42,7 +42,7 @@ class AdminController {
         email,
         number,
         password: hashedPassword,
-        roles
+        roles: Array.isArray(roles) ? roles : [roles]
       });
 
       await admin.save();
@@ -73,13 +73,20 @@ class AdminController {
       if (!isMatch)
         return res.status(401).json({ message: "Invalid email or password" });
 
-      // Generate OTP
+      // Generate JWT Token
+      const token = jwt.sign(
+        { _id: admin._id, roles: admin.roles },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: "24h" }
+      );
+
+      // Generate OTP (Optional: keep it if you still want to send it, but login is now direct)
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = Date.now() + 10 * 60 * 1000;
 
       global.__ADMIN_OTPS__.set(String(admin._id), { otp, expiresAt });
 
-      // Send OTP Email in BACKGROUND
+      // Send OTP Email in BACKGROUND (Optional)
       (async () => {
         try {
           const transporter = await getMailTransporter();
@@ -97,8 +104,15 @@ class AdminController {
 
       return res.status(200).json({
         success: true,
-        message: "OTP sent to email. Verify to continue.",
-        email: admin.email
+        message: "Login successful",
+        token,
+        admin: {
+          _id: admin._id,
+          Firstname: admin.Firstname,
+          Lastname: admin.Lastname,
+          email: admin.email,
+          roles: admin.roles
+        }
       });
 
     } catch (error) {
