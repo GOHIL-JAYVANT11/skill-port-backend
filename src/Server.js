@@ -10,6 +10,7 @@ userRoutes = require("./routes/User/UserRoutes");
 
 app.use("/gknbvg/SkillPort-admin/ertqyuiok", adminRoutes);
 app.use("/gknbvg/SkillPort-user/ertqyuiok", userRoutes);
+app.use("/api/auth", userRoutes);
 
 
 

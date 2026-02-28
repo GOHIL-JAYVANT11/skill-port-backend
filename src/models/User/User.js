@@ -7,8 +7,9 @@ const UserSchema = new mongoose.Schema({
     },
     number: {
         type: String,
-        required: true,
-        unique: true
+        required: function() { return !this.isGoogleUser; },
+        unique: true,
+        sparse: true
     },
     email: {
         type: String,
@@ -17,12 +18,39 @@ const UserSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: true
+        required: function() { return !this.isGoogleUser; }
     },
     Role: {
         type: [String],
         enum: ['Job Seeker', 'Freelancer'],
-        required: true
+        required: function() { return !this.isGoogleUser; }
+    },
+    isGoogleUser: {
+        type: Boolean,
+        default: false
+    },
+    SocialLinks: [
+
+        {
+           github: {
+                type: String,
+                required: false,
+                trim: true
+            },
+            linkdIn: {
+                type: String,
+                required: false,
+                trim: true
+            },
+            portfolio: {
+                type: String,
+                required: false
+            }
+        }
+    ],
+    profilePic: {
+        type: String,
+        default: ""
     },
     resume: {
         type: String,
@@ -32,9 +60,9 @@ const UserSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
-    status: {
+    userstatus: {
         type: String,
-        default: "active"
+        default: "Fresher"
     },
     userimage: {
         type: String,

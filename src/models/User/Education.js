@@ -26,6 +26,50 @@ const EducationSchema = new mongoose.Schema({
         required: false,
         trim: true
     },
+    classXII: [
+        {
+            examinationBoard: {
+                type: String,
+                required: false,
+                trim: true
+            },
+            mediumOfStudy: {
+                type: String,
+                required: false,
+                trim: true
+            },
+            percentage: {
+                type: String,
+                required: false
+            },
+            passingYear: {
+                type: Number,
+                required: false
+            }
+        }
+    ],
+    classX: [
+        {
+            examinationBoard: {
+                type: String,
+                required: false,
+                trim: true
+            },
+            mediumOfStudy: {
+                type: String,
+                required: false,
+                trim: true
+            },
+            percentage: {
+                type: String,
+                required: false
+            },
+            passingYear: {
+                type: Number,
+                required: false
+            }
+        }
+    ],
     courseType: {
         type: String,
         enum: ["Full Time", "Part Time", "Distance", "Online"],
