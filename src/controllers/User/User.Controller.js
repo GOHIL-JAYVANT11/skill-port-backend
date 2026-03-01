@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const nodemailer = require("nodemailer");
 const axios = require("axios");
 const User = require('../../models/User/User');
+const Recruiter = require('../../models/Recuiters/Recuiter');
 const Education = require('../../models/User/Education');
 const UserService = require('../../services/User/User.service');
 const { getOtpTemplate } = require('../../utils/emailTemplate');
@@ -26,12 +27,22 @@ class UserController {
         try {
             const { Fullname, number, email, password, Role } = req.body;
 
-            let user = await User.findOne({ email });
+            // Check if email already exists in Recruiter model
+            const recruiterExists = await Recruiter.findOne({ 
+                $or: [{ email }, { number }]
+            });
+            if (recruiterExists) {
+                return res.status(400).json({ message: "This email or number is already registered as a Recruiter." });
+            }
+
+            let user = await User.findOne({ 
+                $or: [{ email }, { number }]
+            });
 
             if (user) {
-                // If the user exists and is a Google user who hasn't completed their profile
+                // If it's a Google user who hasn't completed their profile, handle it as before
                 if (user.isGoogleUser && (!user.password || !user.number || !user.Role || user.Role.length === 0)) {
-                    
+                    // ... (keep the existing Google user profile completion logic)
                     const hashedPassword = await bcrypt.hash(password, 10);
                     
                     user.Fullname = Fullname || user.Fullname;
@@ -68,25 +79,57 @@ class UserController {
                     });
                 }
 
-                // If it's a regular user or a Google user who already completed their profile
-                return res.status(400).json({ message: "User with this email already exists" });
+                // If user exists, check if they are registering with a new role
+                const incomingRoles = Array.isArray(Role) ? Role : [Role];
+                const hasNewRole = incomingRoles.some(r => !user.Role.includes(r));
+
+                if (hasNewRole) {
+                    // Update the user's roles
+                    user.Role = [...new Set([...user.Role, ...incomingRoles])];
+                    
+                    await user.save();
+
+                    // Since user already exists and is presumably verified (if they had a profile),
+                    // we might just return success or send another OTP.
+                    // Let's send an OTP for security as we are adding a role.
+                    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+                    const expiresAt = Date.now() + 10 * 60 * 1000;
+                    global.__USER_OTPS__.set(String(user._id), { otp, expiresAt });
+
+                    (async () => {
+                        try {
+                            const transporter = await getMailTransporter();
+                            await transporter.sendMail({
+                                from: process.env.MAIL_FROM || process.env.SMTP_USER,
+                                to: user.email,
+                                subject: "Role Addition OTP",
+                                html: getOtpTemplate(otp),
+                            });
+                        } catch (err) {
+                            console.error("OTP send failed:", err.message);
+                        }
+                    })();
+
+                    return res.status(200).json({
+                        success: true,
+                        message: "New role added to existing user. OTP sent to verify.",
+                        email: user.email,
+                        userId: user._id
+                    });
+                }
+
+                // If no new role and not a Google user completing profile
+                return res.status(400).json({ message: "User with this email or number already exists" });
             }
 
-            // Check if number is already taken by someone else
-            const existingNumber = await User.findOne({ number });
-            if (existingNumber) {
-                return res.status(400).json({ message: "User with this number already exists" });
-            }
-
+            const incomingRoles = Array.isArray(Role) ? Role : [Role];
             const hashedPassword = await bcrypt.hash(password, 10);
-
-            // Create new regular user
             const newUser = new User({
                 Fullname,
                 number,
                 email,
                 password: hashedPassword,
-                Role: Array.isArray(Role) ? Role : [Role]
+                Role: incomingRoles
             });
 
             await newUser.save();
@@ -141,14 +184,16 @@ class UserController {
                 return res.status(401).json({ message: "Invalid  password" });
             }
 
-            // Check if education details are filled
-            const education = await Education.findOne({ userId: user._id });
-            if (!education) {
-                return res.status(403).json({
-                    success: false,
-                    message: "pls fillup your education details",
-                    userId: user._id
-                });
+            // Check if education details are filled (only for Job Seeker or Freelancer)
+            if (user.Role.includes('Job Seeker') || user.Role.includes('Freelancer')) {
+                const education = await Education.findOne({ userId: user._id });
+                if (!education) {
+                    return res.status(403).json({
+                        success: false,
+                        message: "pls fillup your education details",
+                        userId: user._id
+                    });
+                }
             }
 
             // Generate OTP
@@ -170,11 +215,20 @@ class UserController {
                 }
             })();
 
+            // Generate Token
+            const token = jwt.sign(
+                { _id: user._id, role: user.Role },
+                process.env.JWT_SECRET || 'your-secret-key',
+                { expiresIn: "24h" }
+            );
+
             res.status(200).json({
                 success: true,
                 message: "Login successful. OTP sent to email. Verify to continue.",
+                token,
                 email: user.email,
-                userId: user._id
+                userId: user._id,
+                Role: user.Role
             });
 
         } catch (error) {
@@ -217,9 +271,6 @@ class UserController {
                 { expiresIn: "24h" }
             );
 
-            // Optional: Mark user as verified if you had that field (but we removed it from schema)
-            // await User.findByIdAndUpdate(user._id, { isVerified: true });
-
             return res.status(200).json({
                 success: true,
                 message: "OTP Verified Successfully",
@@ -251,9 +302,8 @@ class UserController {
                 return res.status(404).json({ message: "User not found" });
 
             const otp = Math.floor(100000 + Math.random() * 900000).toString();
-            const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+            const expiresAt = Date.now() + 10 * 60 * 1000;
             global.__USER_OTPS__.set(String(user._id), { otp, expiresAt });
-
             (async () => {
                 try {
                     const transporter = await getMailTransporter();
@@ -267,7 +317,6 @@ class UserController {
                     console.error("OTP send failed:", err.message);
                 }
             })();
-
             return res.status(200).json({
                 success: true,
                 message: "OTP sent successfully",
@@ -310,8 +359,11 @@ class UserController {
 
         const { email, name, picture } = googleRes.data;
 
-        // console.log("Email:", email);
-        // console.log("Name:", name);
+        // Check if email already exists in Recruiter model
+        const recruiter = await Recruiter.findOne({ email });
+        if (recruiter) {
+            return res.status(400).json({ message: "This email is already registered as a Recruiter. Please login as a Recruiter." });
+        }
 
         let user = await User.findOne({ email });
 
