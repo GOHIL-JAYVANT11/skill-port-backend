@@ -176,7 +176,7 @@ class RecruiterController {
           Fullname: recruiter.Fullname,
           email: recruiter.email,
           Role: recruiter.Role,
-          recruiterId: recruiter.recruiterId,
+          recId: recruiter.recId,
         },
       });
     } catch (error) {
@@ -282,7 +282,7 @@ class RecruiterController {
           email: recruiter.email,
           Role: recruiter.Role,
           profilePic: recruiter.profilePic,
-          recruiterId: recruiter.recruiterId,
+          recId: recruiter.recId,
         },
       });
     } catch (error) {
@@ -307,9 +307,12 @@ class RecruiterController {
         companyWebsite,
         companyLocation,
         companyDescription,
+        socialLinks,
+        companyLogo
       } = req.body;
 
-      const updatedRecruiter = await RecruiterService.updateRecruiter(userId, {
+      const updatedCompany = await RecruiterService.updateCompanyProfile(userId, {
+        recId: userId,
         companyName,
         designation,
         industry,
@@ -317,16 +320,14 @@ class RecruiterController {
         companyWebsite,
         companyLocation,
         companyDescription,
+        socialLinks,
+        companyLogo
       });
-
-      if (!updatedRecruiter) {
-        return res.status(404).json({ message: "Recruiter not found" });
-      }
 
       res.status(200).json({
         success: true,
-        message: "Recruiter details added successfully",
-        data: updatedRecruiter,
+        message: "Recruiter company details updated successfully",
+        data: updatedCompany,
       });
     } catch (error) {
       console.error("Add Recruiter Details Error:", error);
@@ -342,18 +343,222 @@ class RecruiterController {
         return res.status(401).json({ message: "Unauthorized: User ID missing" });
       }
 
-      const recruiter = await RecruiterService.getRecruiterProfile(userId);
+      const { recruiter, companyProfile } = await RecruiterService.getRecruiterProfile(userId);
 
       res.status(200).json({
         success: true,
         message: "Recruiter profile fetched successfully",
-        data: recruiter,
+        data: {
+            ...recruiter.toObject(),
+            companyProfile
+        },
       });
     } catch (error) {
       console.error("Get Recruiter Profile Error:", error);
       if (error.message === "Recruiter not found") {
         return res.status(404).json({ message: error.message });
       }
+      res.status(500).json({ message: "Internal Server Error", error: error.message });
+    }
+  }
+
+  async postJob(req, res) {
+    try {
+      const userId = req.user ? req.user._id : req.body.userId;
+
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized: User ID missing" });
+      }
+
+      const {
+        jobtitle,
+        EmploymentType,
+        WorkMode,
+        Department,
+        Industry,
+        Openings,
+        Deadline,
+        Country,
+        State,
+        City,
+        OfficeAddress,
+        Salary,
+        MinSalary,
+        MaxSalary,
+        SalaryType,
+        Experience,
+        MandatorySkills,
+        Qualification,
+        DegreeRequired,
+        JobDescription,
+        Benefits,
+        InterviewMode,
+      } = req.body;
+
+      // Handle salary mapping from either top-level or nested object
+      let minSal = MinSalary;
+      let maxSal = MaxSalary;
+
+      if (Salary && typeof Salary === 'object') {
+        minSal = Salary.minSalary || minSal;
+        maxSal = Salary.maxSalary || maxSal;
+      }
+
+      const jobData = {
+        recId: userId,
+        jobtitle,
+        EmploymentType,
+        WorkMode,
+        Department,
+        Industry,
+        Openings,
+        Deadline,
+        Country,
+        State,
+        City,
+        OfficeAddress,
+        Salary: {
+            minSalary: minSal,
+            maxSalary: maxSal
+        },
+        SalaryType,
+        Experience,
+        MandatorySkills,
+        Qualification,
+        DegreeRequired,
+        JobDescription,
+        Benefits,
+        InterviewMode,
+      };
+
+      const jobPost = await RecruiterService.createJobPost(jobData);
+
+      res.status(201).json({
+        success: true,
+        message: "Job posted successfully",
+        data: jobPost,
+      });
+    } catch (error) {
+      console.error("Post Job Error:", error);
+      res.status(500).json({ message: "Internal Server Error", error: error.message });
+    }
+  }
+
+  async updateRecruiterProfile(req, res) {
+    try {
+      const userId = req.user ? req.user._id : req.body.userId;
+
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized: User ID missing" });
+      }
+
+      const {
+        // Recruiter Profile fields
+        Fullname,
+        number,
+        email,
+        profilePic,
+        
+        // Company Profile fields
+        companyName,
+        designation,
+        industry,
+        companySize,
+        companyWebsite,
+        companyLocation,
+        companyDescription,
+        socialLinks,
+        companyLogo
+      } = req.body;
+
+      // Update Recruiter Profile
+      const recruiterData = {};
+      if (Fullname !== undefined) recruiterData.Fullname = Fullname;
+      if (number !== undefined) recruiterData.number = number;
+      if (email !== undefined) recruiterData.email = email;
+      if (profilePic !== undefined) recruiterData.profilePic = profilePic;
+
+      const updatedRecruiter = await RecruiterService.updateRecruiter(userId, recruiterData);
+
+      if (!updatedRecruiter) {
+        return res.status(404).json({ message: "Recruiter not found" });
+      }
+
+      // Update Company Profile
+      const companyData = {
+        recId: userId,
+        companyName,
+        designation,
+        industry,
+        companySize,
+        companyWebsite,
+        companyLocation,
+        companyDescription,
+        socialLinks,
+        companyLogo
+      };
+
+      // Filter out undefined fields to avoid overwriting with null/undefined if using a partial update method
+      // However, updateCompanyProfile usually handles upsert. 
+      // Let's rely on the service to handle it, but typically we want to pass what's provided.
+      // Since the request might contain mixed data, we pass all potential company fields.
+      
+      const updatedCompany = await RecruiterService.updateCompanyProfile(userId, companyData);
+
+      res.status(200).json({
+        success: true,
+        message: "Recruiter and Company profile updated successfully",
+        data: {
+          recruiter: updatedRecruiter,
+          companyProfile: updatedCompany
+        }
+      });
+
+    } catch (error) {
+      console.error("Update Recruiter Profile Error:", error);
+      res.status(500).json({ message: "Internal Server Error", error: error.message });
+    }
+  }
+
+  async getRecruiterJobs(req, res) {
+    try {
+      const userId = req.user ? req.user._id : req.query.userId;
+
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized: User ID missing" });
+      }
+
+      const jobs = await RecruiterService.getJobsByRecruiter(userId);
+
+      res.status(200).json({
+        success: true,
+        message: "Recruiter jobs fetched successfully",
+        data: jobs,
+      });
+    } catch (error) {
+      console.error("Get Recruiter Jobs Error:", error);
+      res.status(500).json({ message: "Internal Server Error", error: error.message });
+    }
+  }
+
+  async toggleSavedCandidate(req, res) {
+    try {
+      const recruiterId = req.user ? req.user._id : req.body.recruiterId;
+      const { userId } = req.body;
+
+      if (!recruiterId) return res.status(401).json({ message: "Unauthorized: Recruiter ID missing" });
+      if (!userId) return res.status(400).json({ message: "User ID (Candidate) is required" });
+
+      const result = await RecruiterService.toggleSavedCandidate(recruiterId, userId);
+
+      return res.status(200).json({
+        success: true,
+        message: result.saved ? "Candidate saved successfully" : "Candidate removed from saved list",
+        data: result.savedCandidates
+      });
+
+    } catch (error) {
+      console.error("Toggle Saved Candidate Error:", error);
       res.status(500).json({ message: "Internal Server Error", error: error.message });
     }
   }

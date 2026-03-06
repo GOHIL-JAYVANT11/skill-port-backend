@@ -179,6 +179,11 @@ class UserController {
                 return res.status(401).json({ message: "Invalid email " });
             }
 
+            // Check if user has a password (google users might not)
+            if (!user.password) {
+                return res.status(400).json({ message: "This account uses Google Login. Please login with Google." });
+            }
+
             const isMatch = await bcrypt.compare(password, user.password);
             if (!isMatch) {
                 return res.status(401).json({ message: "Invalid  password" });
@@ -642,6 +647,21 @@ class UserController {
         }
     }
 
+    async getJobPosts(req, res) {
+        try {
+            const jobPosts = await UserService.getAllJobPosts();
+
+            return res.status(200).json({
+                success: true,
+                message: "All job posts fetched successfully",
+                data: jobPosts
+            });
+        } catch (error) {
+            console.error("Get Job Posts Error:", error);
+            return res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
     async deleteData(req, res) {
         try {
             const userId = req.user._id;
@@ -660,6 +680,69 @@ class UserController {
             });
         } catch (error) {
             console.error("Delete Data Error:", error);
+            res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+    async toggleSavedJob(req, res) {
+        try {
+            const userId = req.user ? req.user._id : req.body.userId;
+            const { jobId } = req.body;
+
+            if (!userId) return res.status(401).json({ message: "Unauthorized: User ID missing" });
+            if (!jobId) return res.status(400).json({ message: "Job ID is required" });
+
+            const result = await UserService.toggleSavedJob(userId, jobId);
+
+            return res.status(200).json({
+                success: true,
+                message: result.saved ? "Job saved successfully" : "Job removed from saved list",
+                data: result.savedJobs
+            });
+
+        } catch (error) {
+            console.error("Toggle Saved Job Error:", error);
+            res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+    async saveJob(req, res) {
+        try {
+            const userId = req.user ? req.user._id : req.body.userId;
+            const jobId = req.params.jobId;
+
+            if (!userId) return res.status(401).json({ message: "Unauthorized: User ID missing" });
+            if (!jobId) return res.status(400).json({ message: "Job ID is required" });
+
+            const result = await UserService.toggleSavedJob(userId, jobId);
+
+            return res.status(200).json({
+                success: true,
+                message: result.saved ? "Job saved successfully" : "Job removed from saved list",
+                data: result.savedJobs
+            });
+
+        } catch (error) {
+            console.error("Save Job Error:", error);
+            res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+    async getSavedJobs(req, res) {
+        try {
+            const userId = req.user ? req.user._id : req.body.userId;
+
+            if (!userId) return res.status(401).json({ message: "Unauthorized: User ID missing" });
+
+            const savedJobs = await UserService.getSavedJobs(userId);
+
+            return res.status(200).json({
+                success: true,
+                message: "Saved jobs fetched successfully",
+                data: savedJobs
+            });
+        } catch (error) {
+            console.error("Get Saved Jobs Error:", error);
             res.status(500).json({ message: "Internal Server Error", error: error.message });
         }
     }

@@ -2,8 +2,13 @@ const User = require('../../models/User/User');
 const Education = require('../../models/User/Education');
 const Project = require('../../models/User/Project');
 const Certification = require('../../models/User/certifications');
+const JobPost = require('../../models/Recuiters/JobPost');
 
 class UserService {
+    async getAllJobPosts() {
+        return await JobPost.find({}).populate('recId').sort({ createdAt: -1 });
+    }
+
     async getUserProfile(userId) {
         const user = await User.findById(userId).select("-password");
         if (!user) {
@@ -255,6 +260,37 @@ class UserService {
         }
         
         return results;
+    }
+
+    async toggleSavedJob(userId, jobId) {
+        const user = await User.findById(userId);
+        if (!user) throw new Error("User not found");
+
+        const isSaved = user.SavedJobs.includes(jobId);
+
+        if (isSaved) {
+            // Unsave
+            user.SavedJobs = user.SavedJobs.filter(id => id.toString() !== jobId.toString());
+        } else {
+            // Save
+            user.SavedJobs.push(jobId);
+        }
+
+        await user.save();
+        return { saved: !isSaved, savedJobs: user.SavedJobs };
+    }
+
+    async getSavedJobs(userId) {
+        const user = await User.findById(userId).populate({
+            path: 'SavedJobs',
+            populate: {
+                path: 'recId'
+            }
+        });
+        
+        if (!user) throw new Error("User not found");
+        
+        return user.SavedJobs;
     }
 }
 

@@ -11,6 +11,10 @@ router.put('/update-profile', authDeviceMiddleware,
                  { name: 'certificationFiles', maxCount: 10 }, 
                  { name: 'companyLogo', maxCount: 1 }]), userController.updateProfile);
 router.delete('/delete-data', authDeviceMiddleware, userController.deleteData);
+router.get('/get-All-Job', authDeviceMiddleware, userController.getJobPosts);
+router.post('/toggle-save-job', authDeviceMiddleware, userController.toggleSavedJob);
+router.post('/save-job/:jobId', authDeviceMiddleware, userController.saveJob);
+router.get('/get-saved-jobs', authDeviceMiddleware, userController.getSavedJobs);
 
 
 module.exports = router;

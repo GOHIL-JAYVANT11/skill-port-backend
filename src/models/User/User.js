@@ -75,6 +75,10 @@ const UserSchema = new mongoose.Schema({
     skill: {
         type: [String],
         default: []
-    }
+    },
+    SavedJobs: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'JobPost'
+    }]
 }, { timestamps: true });
 module.exports = mongoose.model('User', UserSchema);

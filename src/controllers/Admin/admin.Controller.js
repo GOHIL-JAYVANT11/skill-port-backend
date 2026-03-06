@@ -2,6 +2,10 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const nodemailer = require("nodemailer");
 const Admin = require('../../models/Admin/Admin');
+const JobPost = require('../../models/Recuiters/JobPost');
+const RecruiterProfile = require('../../models/Recuiters/Recuiter');
+const CompanyProfile = require('../../models/Recuiters/ComapnyProfile');
+const User = require('../../models/User/User');
 const { getOtpTemplate } = require('../../utils/emailTemplate');
 
 
@@ -158,6 +162,73 @@ class AdminController {
 
     } catch (error) {
       return res.status(500).json({ message: "Failed to verify OTP", error: error.message });
+    }
+  }
+
+  // ================= GET ALL JOB POSTS =================
+  async getAllJobPosts(req, res) {
+    try {
+      const jobPosts = await JobPost.find({})
+        .populate('recId')
+        .sort({ createdAt: -1 });
+
+      return res.status(200).json({
+        success: true,
+        message: "All job posts fetched successfully",
+        data: jobPosts
+      });
+    } catch (error) {
+      console.error("Get All Job Posts Error:", error);
+      return res.status(500).json({ message: "Internal Server Error", error: error.message });
+    }
+  }
+
+  // ================= GET ALL USERS AND RECRUITERS =================
+  async getAllUsersAndRecruiters(req, res) {
+    try {
+      const users = await User.find({}).select("-password");
+      const recruiters = await RecruiterProfile.find({}).select("-password");
+
+      return res.status(200).json({
+        success: true,
+        message: "All users and recruiters fetched successfully",
+        data: {
+          users,
+          recruiters
+        }
+      });
+    } catch (error) {
+      console.error("Get All Users and Recruiters Error:", error);
+      return res.status(500).json({ message: "Internal Server Error", error: error.message });
+    }
+  }
+
+  // ================= GET ALL RECRUITERS WITH COMPANY PROFILE =================
+  async getAllRecruitersWithCompanyProfile(req, res) {
+    try {
+      // Fetch all recruiters (excluding password)
+      const recruiters = await RecruiterProfile.find({}).select("-password").lean();
+
+      // Fetch all company profiles
+      const companies = await CompanyProfile.find({}).lean();
+
+      // Merge data: Attach company profile to corresponding recruiter
+      const mergedData = recruiters.map(recruiter => {
+        const company = companies.find(c => c.recId.toString() === recruiter._id.toString());
+        return {
+          ...recruiter,
+          companyProfile: company || null // Add company profile or null if not found
+        };
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "All recruiters with company profiles fetched successfully",
+        data: mergedData
+      });
+    } catch (error) {
+      console.error("Get All Recruiters Error:", error);
+      return res.status(500).json({ message: "Internal Server Error", error: error.message });
     }
   }
 }
