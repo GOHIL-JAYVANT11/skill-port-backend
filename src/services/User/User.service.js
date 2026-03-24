@@ -3,10 +3,64 @@ const Education = require('../../models/User/Education');
 const Project = require('../../models/User/Project');
 const Certification = require('../../models/User/certifications');
 const JobPost = require('../../models/Recuiters/JobPost');
+const Recruiter = require('../../models/Recuiters/Recuiter'); // Ensure Recruiter model is registered for populate
+const ApplyJob = require('../../models/User/ApplyJob');
+const Meeting = require('../../models/Recuiters/Meeting');
+const Proposal = require('../../models/Recuiters/Proposal(Freelancing_Application)');
+const mongoose = require('mongoose');
+
 
 class UserService {
+    async applyForJob(applicationData) {
+        const { userId, jobId, recId } = applicationData;
+
+        // Check if already applied
+        const existingApplication = await ApplyJob.findOne({ userId, jobId });
+        if (existingApplication) {
+            throw new Error("You have already applied for this job");
+        }
+
+        // Validate Job and Recruiter
+        const job = await JobPost.findById(jobId);
+        if (!job) throw new Error("Job post not found");
+
+        const application = new ApplyJob(applicationData);
+        await application.save();
+        
+        return application;
+    }
+
     async getAllJobPosts() {
-        return await JobPost.find({}).populate('recId').sort({ createdAt: -1 });
+        return await JobPost.aggregate([
+            {
+                $lookup: {
+                    from: "recruiterprofiles",
+                    localField: "recId",
+                    foreignField: "_id",
+                    as: "recruiterDetails"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$recruiterDetails",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $addFields: {
+                    recId: { $ifNull: ["$recruiterDetails", "$recId"] }
+                }
+            },
+            {
+                $project: {
+                    recruiterDetails: 0,
+                    "recId.password": 0
+                }
+            },
+            {
+                $sort: { createdAt: -1 }
+            }
+        ]);
     }
 
     async getUserProfile(userId) {
@@ -291,6 +345,47 @@ class UserService {
         if (!user) throw new Error("User not found");
         
         return user.SavedJobs;
+    }
+
+    async getInterviews(userId) {
+        const interviews = await Meeting.find({ candidateId: userId })
+            .populate('jobId')
+            .populate('recruiterId', '-password')
+            .sort({ interviewDate: -1, interviewTime: -1 });
+        
+        return interviews;
+    }
+
+    // ================= CREATE PROPOSAL =================
+    async createProposal(data) {
+        const { freelancerId, projectId } = data;
+
+        // Check already applied
+        const existing = await Proposal.findOne({ freelancerId, projectId });
+        if (existing) {
+            throw new Error("You already submitted proposal for this project");
+        }
+
+        // Fetch project to get recId
+        const project = await mongoose.model("FreelanceProject").findById(projectId);
+        if (!project) {
+            throw new Error("Project not found");
+        }
+
+        const proposal = new Proposal({
+            ...data,
+            recId: project.recId
+        });
+        await proposal.save();
+
+        return proposal;
+    }
+
+    async getMyProposals(userId) {
+        return await Proposal.find({ freelancerId: userId })
+            .populate("projectId", "title budget duration recId")
+            .populate("recId", "Fullname email profilePic")
+            .sort({ createdAt: -1 });
     }
 }
 

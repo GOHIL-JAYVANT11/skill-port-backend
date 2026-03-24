@@ -203,6 +203,35 @@ class AdminController {
     }
   }
 
+  // ================= GET ALL RECRUITERS =================
+  async getAllRecruiters(req, res) {
+    try {
+      // Fetch all recruiters (excluding password)
+      const recruiters = await RecruiterProfile.find({}).select("-password").lean();
+
+      // Fetch all company profiles
+      const companies = await CompanyProfile.find({}).lean();
+
+      // Merge data: Attach company profile to corresponding recruiter
+      const mergedData = recruiters.map(recruiter => {
+        const company = companies.find(c => c.recId.toString() === recruiter._id.toString());
+        return {
+          ...recruiter,
+          companyProfile: company || null // Add company profile or null if not found
+        };
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "All recruiters with company profiles fetched successfully",
+        data: mergedData
+      });
+    } catch (error) {
+      console.error("Get All Recruiters Error:", error);
+      return res.status(500).json({ message: "Internal Server Error", error: error.message });
+    }
+  }
+
   // ================= GET ALL RECRUITERS WITH COMPANY PROFILE =================
   async getAllRecruitersWithCompanyProfile(req, res) {
     try {

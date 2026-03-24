@@ -4,8 +4,11 @@ const nodemailer = require("nodemailer");
 const axios = require("axios");
 const User = require('../../models/User/User');
 const Recruiter = require('../../models/Recuiters/Recuiter');
+const CompanyProfile = require('../../models/Recuiters/ComapnyProfile');
 const Education = require('../../models/User/Education');
+const ApplyJob = require('../../models/User/ApplyJob');
 const UserService = require('../../services/User/User.service');
+const NotificationService = require('../../services/User/Notification.service');
 const { getOtpTemplate } = require('../../utils/emailTemplate');
 
 async function getMailTransporter() {
@@ -28,14 +31,14 @@ class UserController {
             const { Fullname, number, email, password, Role } = req.body;
 
             // Check if email already exists in Recruiter model
-            const recruiterExists = await Recruiter.findOne({ 
+            const recruiterExists = await Recruiter.findOne({
                 $or: [{ email }, { number }]
             });
             if (recruiterExists) {
                 return res.status(400).json({ message: "This email or number is already registered as a Recruiter." });
             }
 
-            let user = await User.findOne({ 
+            let user = await User.findOne({
                 $or: [{ email }, { number }]
             });
 
@@ -44,12 +47,12 @@ class UserController {
                 if (user.isGoogleUser && (!user.password || !user.number || !user.Role || user.Role.length === 0)) {
                     // ... (keep the existing Google user profile completion logic)
                     const hashedPassword = await bcrypt.hash(password, 10);
-                    
+
                     user.Fullname = Fullname || user.Fullname;
                     user.number = number;
                     user.password = hashedPassword;
                     user.Role = Array.isArray(Role) ? Role : [Role];
-                    
+
                     await user.save();
 
                     // Send OTP for verification after completing profile
@@ -86,7 +89,7 @@ class UserController {
                 if (hasNewRole) {
                     // Update the user's roles
                     user.Role = [...new Set([...user.Role, ...incomingRoles])];
-                    
+
                     await user.save();
 
                     // Since user already exists and is presumably verified (if they had a profile),
@@ -336,94 +339,94 @@ class UserController {
 
     // ================= GOOGLE LOGIN =================
     async googleLogin(req, res) {
-    try {
+        try {
 
-        // console.log("====== GOOGLE LOGIN HIT ======");
-        // console.log("Request body:", req.body);
+            // console.log("====== GOOGLE LOGIN HIT ======");
+            // console.log("Request body:", req.body);
 
-        const access_token = req.body.access_token || req.body.token;
+            const access_token = req.body.access_token || req.body.token;
 
-        // console.log("Access token received:", access_token);
+            // console.log("Access token received:", access_token);
 
-        if (!access_token) {
-            // console.log("❌ access_token missing");
-            return res.status(400).json({ message: "Google access token is required" });
-        }
-
-        // 🔹 Fetch Google user data
-        const googleRes = await axios.get(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
-            {
-                headers: {
-                    Authorization: `Bearer ${access_token}`,
-                },
+            if (!access_token) {
+                // console.log("❌ access_token missing");
+                return res.status(400).json({ message: "Google access token is required" });
             }
-        );
 
-        // console.log("Google response data:", googleRes.data);
+            // 🔹 Fetch Google user data
+            const googleRes = await axios.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                {
+                    headers: {
+                        Authorization: `Bearer ${access_token}`,
+                    },
+                }
+            );
 
-        const { email, name, picture } = googleRes.data;
+            // console.log("Google response data:", googleRes.data);
 
-        // Check if email already exists in Recruiter model
-        const recruiter = await Recruiter.findOne({ email });
-        if (recruiter) {
-            return res.status(400).json({ message: "This email is already registered as a Recruiter. Please login as a Recruiter." });
-        }
+            const { email, name, picture } = googleRes.data;
 
-        let user = await User.findOne({ email });
+            // Check if email already exists in Recruiter model
+            const recruiter = await Recruiter.findOne({ email });
+            if (recruiter) {
+                return res.status(400).json({ message: "This email is already registered as a Recruiter. Please login as a Recruiter." });
+            }
 
-        if (!user) {
-            // console.log("🟢 New user creating");
+            let user = await User.findOne({ email });
 
-            user = await User.create({
-                Fullname: name,
-                email,
-                profilePic: picture,
-                isGoogleUser: true,
+            if (!user) {
+                // console.log("🟢 New user creating");
+
+                user = await User.create({
+                    Fullname: name,
+                    email,
+                    profilePic: picture,
+                    isGoogleUser: true,
+                });
+
+            } else {
+                // console.log("🟡 Existing user found");
+
+                user.profilePic = picture;
+                user.isGoogleUser = true;
+                await user.save();
+            }
+
+            // console.log("User after DB:", user);
+
+            const token = jwt.sign(
+                { _id: user._id, role: user.Role },
+                process.env.JWT_SECRET || 'your-secret-key',
+                { expiresIn: "7d" }
+            );
+
+            // console.log("JWT created");
+
+            res.status(200).json({
+                success: true,
+                message: "Google login successful",
+                token,
+                user: {
+                    _id: user._id,
+                    Fullname: user.Fullname,
+                    email: user.email,
+                    Role: user.Role,
+                    profilePic: user.profilePic
+                }
             });
 
-        } else {
-            // console.log("🟡 Existing user found");
+        } catch (error) {
+            console.error("🔥 Google login failed FULL ERROR:");
+            console.error(error);
+            console.error("Google error data:", error.response?.data);
 
-            user.profilePic = picture;
-            user.isGoogleUser = true;
-            await user.save();
+            res.status(500).json({
+                message: "Google login failed",
+                error: error.message
+            });
         }
-
-        // console.log("User after DB:", user);
-
-        const token = jwt.sign(
-            { _id: user._id, role: user.Role },
-            process.env.JWT_SECRET || 'your-secret-key',
-            { expiresIn: "7d" }
-        );
-
-        // console.log("JWT created");
-
-        res.status(200).json({
-            success: true,
-            message: "Google login successful",
-            token,
-            user: {
-                _id: user._id,
-                Fullname: user.Fullname,
-                email: user.email,
-                Role: user.Role,
-                profilePic: user.profilePic
-            }
-        });
-
-    } catch (error) {
-        console.error("🔥 Google login failed FULL ERROR:");
-        console.error(error);
-        console.error("Google error data:", error.response?.data);
-
-        res.status(500).json({
-            message: "Google login failed",
-            error: error.message
-        });
     }
-}
 
     // ================= ADD EDUCATION =================
     async addEducation(req, res) {
@@ -493,7 +496,7 @@ class UserController {
 
             // Handle isPrimary logic: if this is primary, set others for this user to false
             if (isPrimary) {
-                
+
                 await Education.updateMany({ userId }, { isPrimary: false });
             }
 
@@ -582,7 +585,7 @@ class UserController {
             } = req.body;
 
             const updateData = {};
-            
+
             // Handle file upload for resume
             if (req.files && req.files.resume) {
                 updateData.resume = `/uploads/resumes/${req.files.resume[0].filename}`;
@@ -612,7 +615,7 @@ class UserController {
 
             if (certifications !== undefined) {
                 let list = Array.isArray(certifications) ? certifications : [certifications];
-                
+
                 // Parse strings if they are sent as JSON strings from frontend
                 list = list.map(c => typeof c === 'string' ? JSON.parse(c) : c);
 
@@ -624,7 +627,7 @@ class UserController {
                         }
                     });
                 }
-                
+
                 await UserService.upsertCertifications(userId, list);
             }
 
@@ -638,8 +641,8 @@ class UserController {
 
         } catch (error) {
             console.error("Update Profile Error:", error);
-            if (error.message === "Email already in use by another account" || 
-                error.message === "Number already in use by another account" || 
+            if (error.message === "Email already in use by another account" ||
+                error.message === "Number already in use by another account" ||
                 error.message === "User not found") {
                 return res.status(400).json({ message: error.message });
             }
@@ -658,6 +661,34 @@ class UserController {
             });
         } catch (error) {
             console.error("Get Job Posts Error:", error);
+            return res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+    async getAllRecruiters(req, res) {
+        try {
+            // Fetch all recruiters (excluding password)
+            const recruiters = await Recruiter.find({}).select("-password").lean();
+
+            // Fetch all company profiles
+            const companies = await CompanyProfile.find({}).lean();
+
+            // Merge data: Attach company profile to corresponding recruiter
+            const mergedData = recruiters.map(recruiter => {
+                const company = companies.find(c => c.recId.toString() === recruiter._id.toString());
+                return {
+                    ...recruiter,
+                    companyProfile: company || null // Add company profile or null if not found
+                };
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: "All recruiters with company profiles fetched successfully",
+                data: mergedData
+            });
+        } catch (error) {
+            console.error("Get All Recruiters Error:", error);
             return res.status(500).json({ message: "Internal Server Error", error: error.message });
         }
     }
@@ -746,6 +777,241 @@ class UserController {
             res.status(500).json({ message: "Internal Server Error", error: error.message });
         }
     }
+
+    async getMyApplications(req, res) {
+        try {
+            const userId = req.user ? req.user._id : req.body.userId;
+
+            if (!userId) {
+                return res.status(401).json({ message: "Unauthorized: User ID missing" });
+            }
+
+            const applications = await ApplyJob.find({ userId })
+                .populate('jobId')
+                .sort({ createdAt: -1 });
+
+            return res.status(200).json({
+                success: true,
+                message: "User applications fetched successfully",
+                data: applications
+            });
+
+        } catch (error) {
+            console.error("Get My Applications Error:", error);
+            res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+    async applyForJob(req, res) {
+        try {
+            const userId = req.user ? req.user._id : req.body.userId;
+            const { jobId, recId } = req.query;
+
+            if (!userId) return res.status(401).json({ message: "Unauthorized: User ID missing" });
+            if (!jobId) return res.status(400).json({ message: "Job ID is required" });
+            if (!recId) return res.status(400).json({ message: "Recruiter ID is required" });
+
+            const {
+                Fullname,
+                number,
+                location,
+                jobtitle,
+                Experience,
+                Salary, // Should contain { CurrentSalary, ExpectedSalary }
+                NoticePeriod,
+                willing_to_relocate,
+                Resume,
+                Description,
+                SocialLinks, // Should contain { Portfolio, LinkedIn, project_link }
+                Skill,
+                has_required_skill,
+                confirm_info_accurate,
+                agree_data_share,
+                read_job_description
+            } = req.body;
+
+            // Basic validation
+            if (!Fullname || !number || !location || !jobtitle || !Experience || !Salary || !NoticePeriod || !Resume || !confirm_info_accurate || !agree_data_share || !read_job_description) {
+                return res.status(400).json({ message: "Missing required fields" });
+            }
+
+            const applicationData = {
+                userId,
+                jobId,
+                recId,
+                Fullname,
+                number,
+                location,
+                jobtitle,
+                Experience,
+                Salary: {
+                    CurrentSalary: Salary.CurrentSalary,
+                    ExpectedSalary: Salary.ExpectedSalary
+                },
+                NoticePeriod,
+                willing_to_relocate: willing_to_relocate === 'true' || willing_to_relocate === true,
+                Resume,
+                Description,
+                SocialLinks: {
+                    Portfolio: SocialLinks?.Portfolio,
+                    LinkedIn: SocialLinks?.LinkedIn,
+                    project_link: SocialLinks?.project_link
+                },
+                Skill: Array.isArray(Skill) ? Skill : (Skill ? [Skill] : []),
+                has_required_skill: has_required_skill === 'true' || has_required_skill === true,
+                confirm_info_accurate: confirm_info_accurate === 'true' || confirm_info_accurate === true,
+                agree_data_share: agree_data_share === 'true' || agree_data_share === true,
+                read_job_description: read_job_description === 'true' || read_job_description === true
+            };
+
+            const application = await UserService.applyForJob(applicationData);
+
+            return res.status(201).json({
+                success: true,
+                message: "Job application submitted successfully",
+                data: application
+            });
+
+        } catch (error) {
+            console.error("Apply Job Error:", error);
+            if (error.message === "You have already applied for this job" || error.message === "Job post not found") {
+                return res.status(400).json({ message: error.message });
+            }
+            res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+    async getInterviews(req, res) {
+        try {
+            const userId = req.user ? req.user._id : req.query.userId;
+
+            if (!userId) {
+                return res.status(401).json({ message: "Unauthorized: User ID missing" });
+            }
+
+            const interviews = await UserService.getInterviews(userId);
+
+            return res.status(200).json({
+                success: true,
+                message: "Interviews fetched successfully",
+                data: interviews
+            });
+
+        } catch (error) {
+            console.error("Get Interviews Error:", error);
+            res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+    // ================= APPLY FOR FREELANCE PROJECT =================
+    async applyForProject(req, res) {
+        try {
+            const freelancerId = req.user ? req.user._id : req.body.userId;
+            const { projectId, coverLetter, proposedBudget, deliveryDays } = req.body;
+
+            if (!freelancerId) {
+                return res.status(401).json({ message: "Unauthorized: User ID missing" });
+            }
+
+            if (!projectId || !coverLetter || !proposedBudget || !deliveryDays) {
+                return res.status(400).json({ message: "All fields are required" });
+            }
+
+            const proposal = await UserService.createProposal({
+                freelancerId,
+                projectId,
+                coverLetter,
+                proposedBudget,
+                deliveryDays
+            });
+
+            return res.status(201).json({
+                success: true,
+                message: "Proposal submitted successfully",
+                data: proposal
+            });
+
+        } catch (error) {
+            console.error("Apply Project Error:", error);
+            return res.status(400).json({ message: error.message });
+        }
+    }
+
+    // ================= GET MY PROPOSALS =================
+    async getMyProposals(req, res) {
+        try {
+            const userId = req.user ? req.user._id : req.query.userId;
+
+            if (!userId) {
+                return res.status(401).json({ message: "Unauthorized: User ID missing" });
+            }
+
+            const proposals = await UserService.getMyProposals(userId);
+
+            return res.status(200).json({
+                success: true,
+                message: "Proposals fetched successfully",
+                data: proposals
+            });
+
+        } catch (error) {
+            console.error("Get My Proposals Error:", error);
+            res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+    // ================= GET NOTIFICATIONS =================
+    async getNotifications(req, res) {
+        try {
+            const userId = req.user ? req.user._id : req.query.userId;
+
+            if (!userId) {
+                return res.status(401).json({ message: "Unauthorized: User ID missing" });
+            }
+
+            const notifications = await NotificationService.getNotificationsByUser(userId);
+
+            return res.status(200).json({
+                success: true,
+                message: "Notifications fetched successfully",
+                data: notifications
+            });
+
+        } catch (error) {
+            console.error("Get Notifications Error:", error);
+            res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+    // ================= MARK NOTIFICATION AS READ =================
+    async markNotificationRead(req, res) {
+        try {
+            const userId = req.user ? req.user._id : req.body.userId;
+            const { notificationId } = req.params;
+
+            if (!userId) {
+                return res.status(401).json({ message: "Unauthorized: User ID missing" });
+            }
+
+            const notification = await NotificationService.markAsRead(notificationId, userId);
+
+            if (!notification) {
+                return res.status(404).json({ message: "Notification not found" });
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: "Notification marked as read",
+                data: notification
+            });
+
+        } catch (error) {
+            console.error("Mark Notification Read Error:", error);
+            res.status(500).json({ message: "Internal Server Error", error: error.message });
+        }
+    }
+
+
 }
 
 module.exports = new UserController();

@@ -6,6 +6,10 @@ const JobPostSchema = new mongoose.Schema({
         ref: "RecruiterProfile",
         required: true
     },
+    companyName: {
+        type: String,
+        required: false
+    },  
     jobtitle: {
         type: String,
         required: true
@@ -68,7 +72,7 @@ const JobPostSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    MandatorySkills: {
+    Skill: {
         type: [String],
         required: true
     },

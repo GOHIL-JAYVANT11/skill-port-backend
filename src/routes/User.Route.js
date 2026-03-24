@@ -12,9 +12,18 @@ router.put('/update-profile', authDeviceMiddleware,
                  { name: 'companyLogo', maxCount: 1 }]), userController.updateProfile);
 router.delete('/delete-data', authDeviceMiddleware, userController.deleteData);
 router.get('/get-All-Job', authDeviceMiddleware, userController.getJobPosts);
+router.get('/get-all-Recuiters', authDeviceMiddleware, userController.getAllRecruiters);
 router.post('/toggle-save-job', authDeviceMiddleware, userController.toggleSavedJob);
 router.post('/save-job/:jobId', authDeviceMiddleware, userController.saveJob);
 router.get('/get-saved-jobs', authDeviceMiddleware, userController.getSavedJobs);
+router.get('/get-my-applications', authDeviceMiddleware, userController.getMyApplications);
+router.get('/get-interviews', authDeviceMiddleware, userController.getInterviews);
+router.post('/apply-job', authDeviceMiddleware, userController.applyForJob);
+
+router.post('/apply-project', authDeviceMiddleware, userController.applyForProject);
+router.get('/get-my-proposals', authDeviceMiddleware, userController.getMyProposals);
+router.get('/notifications', authDeviceMiddleware, userController.getNotifications);
+router.put('/notifications/:notificationId/read', authDeviceMiddleware, userController.markNotificationRead);
 
 
 module.exports = router;
